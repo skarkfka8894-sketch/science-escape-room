@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1막 · 정전된 학교</title>
+<style>
+:root{
+  --void:#070B10;
+  --slate:#111A23;
+  --slate-2:#16222D;
+  --wire:#2B3D4B;
+  --lamp:#FFC24B;      /* 따뜻한 빛 = 전구, 진행 */
+  --lamp-dim:#8a6a2c;
+  --spark:#7FD4E8;     /* 차가운 빛 = 전류, 자기 */
+  --rust:#C1503C;
+  --paper:#E7E2D6;
+  --mute:#8C9AA6;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"D2Coding",monospace;
+  --sans:"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+  --mx:50%; --my:40%; --beam:280px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--void);
+  color:var(--paper);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.65;
+  min-height:100vh;
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* ── 손전등 ── */
+#beam{
+  position:fixed; inset:0; z-index:50; pointer-events:none;
+  background:radial-gradient(circle var(--beam) at var(--mx) var(--my),
+    rgba(4,7,10,0) 0%, rgba(4,7,10,.35) 45%, rgba(4,7,10,.82) 78%, rgba(4,7,10,.93) 100%);
+  transition:background .4s ease;
+}
+body.lights-on #beam{opacity:0}
+
+/* ── HUD ── */
+#hud{
+  position:sticky; top:0; z-index:40;
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:10px 16px;
+  background:linear-gradient(180deg,rgba(7,11,16,.97),rgba(7,11,16,.82));
+  border-bottom:1px solid var(--wire);
+}
+.hud-label{font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:var(--mute)}
+.batt{display:flex;align-items:center;gap:8px}
+.batt-shell{width:74px;height:13px;border:1px solid var(--wire);border-radius:2px;padding:2px;position:relative}
+.batt-shell::after{content:"";position:absolute;right:-4px;top:3px;width:3px;height:5px;background:var(--wire)}
+.batt-fill{height:100%;background:var(--lamp);width:100%;transition:width .5s linear,background .5s}
+.batt.low .batt-fill{background:var(--rust)}
+.slots{display:flex;gap:6px;margin-left:auto}
+.slot{
+  width:30px;height:36px;border:1px solid var(--wire);border-radius:3px;
+  display:grid;place-items:center;font-family:var(--mono);font-size:19px;color:var(--lamp-dim);
+  background:var(--slate);
+}
+.slot.filled{border-color:var(--lamp);color:var(--lamp);background:#1d1708;box-shadow:0 0 14px rgba(255,194,75,.18)}
+#lightBtn{
+  background:none;border:1px solid var(--wire);color:var(--mute);
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  padding:6px 9px;border-radius:3px;cursor:pointer;
+}
+#lightBtn:hover{border-color:var(--spark);color:var(--spark)}
+
+/* ── 레이아웃 ── */
+main{max-width:720px;margin:0 auto;padding:28px 20px 90px}
+section{display:none}
+section.active{display:block;animation:fade .5s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--spark);margin-bottom:10px}
+h1{font-size:clamp(30px,7vw,46px);font-weight:800;letter-spacing:-.03em;line-height:1.1;margin:0 0 6px}
+h2{font-size:clamp(21px,4.4vw,27px);font-weight:800;letter-spacing:-.02em;margin:0 0 14px}
+.story{color:var(--mute);border-left:2px solid var(--wire);padding:2px 0 2px 14px;margin:0 0 22px}
+.story em{color:var(--paper);font-style:normal}
+p{margin:0 0 14px}
+
+.card{background:var(--slate);border:1px solid var(--wire);border-radius:6px;padding:18px;margin:0 0 18px}
+.note{font-family:var(--mono);font-size:12px;color:var(--spark);letter-spacing:.02em}
+
+/* 선택지 */
+.choices{display:grid;gap:10px}
+.choices.two{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.choices.three{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.opt{
+  background:var(--slate-2);border:1px solid var(--wire);border-radius:5px;
+  color:var(--paper);font-family:var(--sans);font-size:15px;text-align:left;
+  padding:14px;cursor:pointer;transition:border-color .15s,transform .1s;
+  display:flex;flex-direction:column;gap:8px;
+}
+.opt:hover{border-color:var(--spark)}
+.opt:focus-visible{outline:2px solid var(--spark);outline-offset:2px}
+.opt:active{transform:scale(.985)}
+.opt .tag{font-family:var(--mono);font-size:11px;color:var(--mute);letter-spacing:.1em}
+.opt.picked{border-color:var(--lamp)}
+.opt.wrong{animation:shake .35s}
+.opt[disabled]{opacity:.45;cursor:default}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* 순서 클릭 */
+.parts{display:flex;flex-wrap:wrap;gap:10px}
+.part{
+  background:var(--slate-2);border:1px solid var(--wire);border-radius:40px;
+  color:var(--paper);padding:11px 18px;font-size:15px;cursor:pointer;font-family:var(--sans);
+}
+.part:hover{border-color:var(--spark)}
+.part.on{border-color:var(--lamp);color:var(--lamp);background:#1d1708}
+.part.wrong{animation:shake .35s;border-color:var(--rust)}
+.seq{font-family:var(--mono);font-size:13px;color:var(--mute);min-height:22px;margin-top:12px}
+
+/* 데이터 표 */
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:14px;margin:4px 0 6px}
+th,td{border:1px solid var(--wire);padding:9px 6px;text-align:center}
+th{color:var(--mute);font-weight:400;font-size:11px;letter-spacing:.12em}
+td{color:var(--paper)}
+
+/* 힌트 */
+.hintbox{margin:18px 0 0;border-top:1px dashed var(--wire);padding-top:14px}
+.hintbtn{
+  background:none;border:1px solid var(--lamp-dim);color:var(--lamp);
+  border-radius:40px;padding:8px 16px;font-size:13px;font-family:var(--sans);cursor:pointer;
+}
+.hintbtn:hover{background:#1d1708}
+.hintbtn[disabled]{opacity:.4;cursor:default}
+.hint{
+  background:#151109;border-left:2px solid var(--lamp);border-radius:0 4px 4px 0;
+  padding:11px 14px;margin-top:10px;font-size:14.5px;color:#F0DFB8;
+  animation:fade .3s ease both;
+}
+.hint b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--lamp-dim);display:block;margin-bottom:3px}
+
+/* 피드백 */
+.fb{min-height:26px;margin-top:14px;font-size:15px}
+.fb.ok{color:var(--lamp)}
+.fb.no{color:var(--rust)}
+
+/* 버튼 */
+.go{
+  background:var(--lamp);color:#0F0A02;border:none;border-radius:4px;
+  padding:14px 26px;font-size:16px;font-weight:700;font-family:var(--sans);
+  cursor:pointer;margin-top:18px;
+}
+.go:hover{background:#ffd06f}
+.go.ghost{background:none;border:1px solid var(--wire);color:var(--paper)}
+.go.ghost:hover{border-color:var(--spark);background:none}
+
+/* 자물쇠 */
+.lockrow{display:flex;gap:10px;justify-content:center;margin:22px 0}
+.lockrow input{
+  width:58px;height:74px;text-align:center;font-family:var(--mono);font-size:32px;
+  background:var(--slate-2);border:1px solid var(--wire);border-radius:4px;color:var(--lamp);
+}
+.lockrow input:focus{outline:none;border-color:var(--lamp);box-shadow:0 0 16px rgba(255,194,75,.2)}
+
+/* 최종 */
+.code{
+  font-family:var(--mono);font-size:clamp(34px,9vw,58px);letter-spacing:.2em;
+  color:var(--lamp);text-align:center;margin:10px 0 4px;text-shadow:0 0 30px rgba(255,194,75,.3)
+}
+.stats{display:flex;gap:26px;justify-content:center;font-family:var(--mono);font-size:13px;color:var(--mute);margin-top:16px;flex-wrap:wrap}
+
+svg{max-width:100%;height:auto;display:block}
+.wire-s{stroke:var(--wire);stroke-width:2;fill:none}
+.bulb-off{fill:#243441;stroke:var(--wire);stroke-width:2}
+.bulb-on{fill:var(--lamp);stroke:var(--lamp);stroke-width:2}
+.bulb-weak{fill:#5c4a1e;stroke:var(--lamp-dim);stroke-width:2}
+.lbl{fill:var(--mute);font-family:var(--mono);font-size:10px}
+
+/* 위치 표시 */
+.placebar{
+  flex-basis:100%;display:flex;align-items:center;gap:9px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.13em;color:var(--mute);
+  border-top:1px solid var(--wire);padding-top:8px;margin-top:2px;
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--spark);animation:pulse 2.4s infinite}
+@keyframes pulse{50%{opacity:.2}}
+.clock{margin-left:auto;color:var(--spark)}
+
+/* 이동 화면 */
+#move{text-align:center;padding-top:16vh}
+#moveTo{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--spark);margin-bottom:18px}
+#moveLine{font-size:17px;color:var(--paper);max-width:420px;margin:0 auto}
+.walk{height:2px;background:var(--wire);border-radius:2px;overflow:hidden;max-width:280px;margin:28px auto 0}
+.walk i{display:block;height:100%;width:0;background:var(--spark);animation:walk 2.1s ease-in-out forwards}
+@keyframes walk{to{width:100%}}
+
+/* 튜토리얼 */
+.tut{display:grid;gap:12px;margin-bottom:18px}
+.tut .row{display:flex;gap:14px;background:var(--slate);border:1px solid var(--wire);border-radius:6px;padding:15px}
+.tut .n{font-family:var(--mono);font-size:12px;color:var(--spark);padding-top:3px}
+.tut b{display:block;margin-bottom:4px}
+.tut p{margin:0;font-size:14.5px;color:var(--mute)}
+.darkspot{border:1px dashed var(--wire);border-radius:5px;padding:24px 16px;text-align:center;margin:14px 0 0}
+.darkspot .prompt{color:var(--mute);font-size:13px;font-family:var(--mono);letter-spacing:.1em}
+.darkspot .hiddenline{opacity:0;transition:opacity .6s;color:var(--lamp);font-size:15px}
+.darkspot.lit .prompt{display:none}
+.darkspot.lit .hiddenline{opacity:1}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="beam"></div>
+
+<div id="hud">
+  <div class="batt" id="batt">
+    <span class="hud-label">손전등</span>
+    <div class="batt-shell"><div class="batt-fill" id="battFill"></div></div>
+    <span class="hud-label" id="battPct">100%</span>
+  </div>
+  <button id="lightBtn">조명 켜기</button>
+  <div class="slots" id="slots">
+    <div class="slot" data-i="0"></div>
+    <div class="slot" data-i="1"></div>
+    <div class="slot" data-i="2"></div>
+    <div class="slot" data-i="3"></div>
+  </div>
+  <div class="placebar">
+    <span class="dot"></span>
+    <span id="placeName">2학년 4반 교실</span>
+    <span class="clock" id="clock">20:41</span>
+  </div>
+</div>
+
+<main>
+
+<!-- ══ 시작 ══ -->
+<section id="s0" class="active">
+  <div class="eyebrow">1막</div>
+  <h1>정전된 학교</h1>
+  <p class="story">
+    9월 12일 금요일, 야간 자율학습 마지막 교시.<br><br>
+    20시 41분. 형광등이 한 번 깜빡이더니 학교 전체가 꺼졌다. 비상등도 들어오지 않는다.
+    교실 뒷문에서 <em>철컥</em> 하는 소리가 났다. 정전되면 자동으로 잠기는 문이다.<br><br>
+    휴대전화는 하필 오늘 사물함 안에 있다. 가방에서 잡히는 건 고장 난 손전등과,
+    지난주 실험에 쓰고 반납하지 않은 <em>부품 상자</em>뿐.
+  </p>
+  <div class="card">
+    <p>1층 복도 끝 <b>배전반</b>까지 가면 문을 열 수 있다. 가는 길에 잠금 장치에 넣을 <b>네 자리 숫자</b>를 모아야 한다.</p>
+    <p class="note">혼자 간다. 복도는 캄캄하다.</p>
+  </div>
+  <button class="go" onclick="show('s0b')">가방에서 손전등을 꺼낸다</button>
+</section>
+
+<section id="s0b">
+  <div class="eyebrow">조작법</div>
+  <h2>세 가지만 알면 된다</h2>
+  <div class="tut">
+    <div class="row"><span class="n">01</span><div>
+      <b>손전등</b>
+      <p>마우스를 움직이면 그 자리가 밝아진다. 태블릿이라면 보고 싶은 곳을 손가락으로 톡 누르면 된다. 어두운 곳은 비춰야 보인다.</p>
+    </div></div>
+    <div class="row"><span class="n">02</span><div>
+      <b>힌트</b>
+      <p>모르겠으면 문제 아래 힌트 단추를 누른다. 한 문제에 세 개까지 나오고, 뒤로 갈수록 자세해진다. 배터리가 조금 줄지만 손전등이 꺼지는 일은 없다. 눈치 볼 것 없이 눌러라.</p>
+    </div></div>
+    <div class="row"><span class="n">03</span><div>
+      <b>숫자 칸</b>
+      <p>문제를 풀 때마다 화면 위쪽 네 칸에 숫자가 하나씩 채워진다. 네 개를 다 모으면 철문이 열린다. 어두운 게 힘들면 위쪽 <b>조명 켜기</b>를 눌러도 된다.</p>
+    </div></div>
+  </div>
+
+  <p>연습 삼아 한 번 해보자. 아래 어두운 곳을 손전등으로 비춰 보라.</p>
+  <div class="darkspot" id="spot">
+    <div class="prompt">비춰 보라</div>
+    <div class="hiddenline">창문 유리에 유성펜으로 쓴 글씨가 있다.<br>「20:40 이후 과학실 출입 금지 — 정 선생」</div>
+  </div>
+
+  <button class="go" onclick="show('s1')">손전등을 켠다</button>
+</section>
+
+<section id="move">
+  <div id="moveTo"></div>
+  <div id="moveLine"></div>
+  <div class="walk"><i id="walkBar"></i></div>
+</section>
+
+<!-- ══ 퍼즐 1 ══ -->
+<section id="s1">
+  <div class="eyebrow">첫 번째 · 손전등</div>
+  <h2>불을 켜야 움직인다</h2>
+  <p class="story">손전등 안의 전선이 빠져 있다. 전지와 전구를 다시 이어야 한다.</p>
+
+  <div class="card">
+    <svg viewBox="0 0 420 130" aria-label="전지와 전구 그림">
+      <rect x="30" y="45" width="100" height="42" rx="3" class="wire-s"/>
+      <rect x="30" y="45" width="34" height="42" rx="3" fill="#243441" stroke="none"/>
+      <text x="47" y="72" class="lbl" text-anchor="middle" fill="#C1503C">−</text>
+      <text x="112" y="72" class="lbl" text-anchor="middle" fill="#FFC24B">+</text>
+      <text x="80" y="105" class="lbl" text-anchor="middle">전지</text>
+
+      <circle cx="300" cy="52" r="26" class="bulb-off" id="p1bulb"/>
+      <rect x="288" y="78" width="24" height="18" class="wire-s"/>
+      <line x1="288" y1="84" x2="312" y2="84" class="wire-s"/>
+      <line x1="288" y1="90" x2="312" y2="90" class="wire-s"/>
+      <rect x="294" y="96" width="12" height="8" class="wire-s"/>
+      <text x="352" y="90" class="lbl">나사 부분</text>
+      <text x="352" y="106" class="lbl">꼭지</text>
+      <line x1="316" y1="100" x2="345" y2="100" class="wire-s"/>
+      <line x1="316" y1="86" x2="345" y2="86" class="wire-s"/>
+      <text x="300" y="20" class="lbl" text-anchor="middle">전구</text>
+    </svg>
+  </div>
+
+  <p><b>전류가 흐르는 순서대로</b> 눌러라.</p>
+  <div class="parts" id="p1parts">
+    <button class="part" data-k="c">전구의 나사 부분</button>
+    <button class="part" data-k="a">전지의 (+)극</button>
+    <button class="part" data-k="d">전지의 (−)극</button>
+    <button class="part" data-k="b">전구의 꼭지</button>
+  </div>
+  <div class="seq" id="p1seq">순서: —</div>
+  <div class="fb" id="p1fb"></div>
+
+  <div class="hintbox" data-p="1">
+    <button class="hintbtn">힌트 보기</button>
+    <div class="hints"></div>
+  </div>
+</section>
+
+<!-- ══ 퍼즐 2 ══ -->
+<section id="s2">
+  <div class="eyebrow">두 번째 · 복도 배전반</div>
+  <h2>복도 전구를 모두 켜라</h2>
+  <p class="story">복도 전구 네 개가 배전반 뒤에서 끊겨 있다. 연결 방식 세 가지가 남아 있다.</p>
+
+  <div class="card">
+    <p>네 개가 <b>모두, 밝게</b> 켜지는 연결은 어느 것인가?</p>
+    <div class="choices three" id="p2opts">
+
+      <button class="opt" data-k="ser">
+        <span class="tag">A · 한 줄로 이어 붙임</span>
+        <svg viewBox="0 0 190 80"><path class="wire-s" d="M15 20 H175 V60 H15 Z"/>
+          <rect x="8" y="32" width="14" height="16" fill="#243441" stroke="#2B3D4B"/>
+          <circle cx="55" cy="20" r="9" class="bulb-weak"/><circle cx="95" cy="20" r="9" class="bulb-weak"/>
+          <circle cx="135" cy="20" r="9" class="bulb-weak"/><circle cx="165" cy="45" r="9" class="bulb-weak"/>
+        </svg>
+      </button>
+
+      <button class="opt" data-k="par">
+        <span class="tag">B · 각각 따로 갈라 붙임</span>
+        <svg viewBox="0 0 190 80"><path class="wire-s" d="M15 18 H175 M15 62 H175 M50 18 V62 M85 18 V62 M120 18 V62 M155 18 V62"/>
+          <rect x="8" y="32" width="14" height="16" fill="#243441" stroke="#2B3D4B"/>
+          <circle cx="50" cy="40" r="9" class="bulb-off"/><circle cx="85" cy="40" r="9" class="bulb-off"/>
+          <circle cx="120" cy="40" r="9" class="bulb-off"/><circle cx="155" cy="40" r="9" class="bulb-off"/>
+        </svg>
+      </button>
+
+      <button class="opt" data-k="cut">
+        <span class="tag">C · 한 줄인데 한 곳이 끊김</span>
+        <svg viewBox="0 0 190 80"><path class="wire-s" d="M15 20 H100 M118 20 H175 V60 H15 Z"/>
+          <rect x="8" y="32" width="14" height="16" fill="#243441" stroke="#2B3D4B"/>
+          <line x1="102" y1="12" x2="116" y2="28" stroke="#C1503C" stroke-width="2"/>
+          <line x1="116" y1="12" x2="102" y2="28" stroke="#C1503C" stroke-width="2"/>
+          <circle cx="55" cy="20" r="9" class="bulb-off"/><circle cx="140" cy="20" r="9" class="bulb-off"/>
+          <circle cx="165" cy="45" r="9" class="bulb-off"/><circle cx="40" cy="60" r="9" class="bulb-off"/>
+        </svg>
+      </button>
+
+    </div>
+    <div class="fb" id="p2fb"></div>
+  </div>
+
+  <div class="hintbox" data-p="2">
+    <button class="hintbtn">힌트 보기</button>
+    <div class="hints"></div>
+  </div>
+</section>
+
+<!-- ══ 퍼즐 3 ══ -->
+<section id="s3">
+  <div class="eyebrow">세 번째 · 계기판</div>
+  <h2>전류가 가장 센 회로</h2>
+  <p class="story">배전반 계기판에 회로 세 개의 값이 남아 있다. 전류가 가장 센 회로의 <em>전류값</em>이 다음 숫자다.</p>
+
+  <div class="card">
+    <table>
+      <tr><th>회로</th><th>전압</th><th>저항</th><th>전류</th></tr>
+      <tr><td>A</td><td>12 V</td><td>6 Ω</td><td>?</td></tr>
+      <tr><td>B</td><td>9 V</td><td>3 Ω</td><td>?</td></tr>
+      <tr><td>C</td><td>6 V</td><td>6 Ω</td><td>?</td></tr>
+    </table>
+    <p class="note">학습지 3번 표에 세 회로의 전류를 모두 계산해 적어 둘 것.</p>
+    <p>전류가 가장 센 회로는?</p>
+    <div class="choices three" id="p3opts">
+      <button class="opt" data-k="A"><span class="tag">회로</span>A</button>
+      <button class="opt" data-k="B"><span class="tag">회로</span>B</button>
+      <button class="opt" data-k="C"><span class="tag">회로</span>C</button>
+    </div>
+    <div class="fb" id="p3fb"></div>
+  </div>
+
+  <div class="hintbox" data-p="3">
+    <button class="hintbtn">힌트 보기</button>
+    <div class="hints"></div>
+  </div>
+</section>
+
+<!-- ══ 퍼즐 4 ══ -->
+<section id="s4">
+  <div class="eyebrow">네 번째 · 과학실 앞 복도</div>
+  <h2>어느 바늘이 가장 크게 움직일까</h2>
+  <p class="story">천장을 따라 굵은 전선이 지나가고, 나침반들은 그 아래 <em>서로 다른 거리에</em> 놓여 있다. 옆에는 전선으로 이어진 스위치가 하나. 여기서 뭘 하고 있었던 걸까.</p>
+
+  <div class="card">
+    <svg viewBox="0 0 340 190" aria-label="전선 아래 놓인 나침반 네 개">
+      <line x1="10" y1="18" x2="330" y2="18" class="wire-s" stroke-width="4"/>
+      <text x="170" y="12" class="lbl" text-anchor="middle">천장 전선</text>
+
+      <g><circle cx="55" cy="58" r="20" fill="#16222D" stroke="#2B3D4B" stroke-width="2"/>
+        <g class="needle" id="nd1"><line x1="37" y1="58" x2="55" y2="58" stroke="#C1503C" stroke-width="3.5"/>
+        <line x1="55" y1="58" x2="73" y2="58" stroke="#8C9AA6" stroke-width="3"/></g>
+        <circle cx="55" cy="58" r="3" fill="#E7E2D6"/>
+        <text x="55" y="94" class="lbl" text-anchor="middle">가 · 10 cm</text></g>
+
+      <g><circle cx="135" cy="80" r="20" fill="#16222D" stroke="#2B3D4B" stroke-width="2"/>
+        <g class="needle" id="nd2"><line x1="117" y1="80" x2="135" y2="80" stroke="#C1503C" stroke-width="3.5"/>
+        <line x1="135" y1="80" x2="153" y2="80" stroke="#8C9AA6" stroke-width="3"/></g>
+        <circle cx="135" cy="80" r="3" fill="#E7E2D6"/>
+        <text x="135" y="116" class="lbl" text-anchor="middle">나 · 30 cm</text></g>
+
+      <g><circle cx="220" cy="105" r="20" fill="#16222D" stroke="#2B3D4B" stroke-width="2"/>
+        <g class="needle" id="nd3"><line x1="202" y1="105" x2="220" y2="105" stroke="#C1503C" stroke-width="3.5"/>
+        <line x1="220" y1="105" x2="238" y2="105" stroke="#8C9AA6" stroke-width="3"/></g>
+        <circle cx="220" cy="105" r="3" fill="#E7E2D6"/>
+        <text x="220" y="141" class="lbl" text-anchor="middle">다 · 60 cm</text></g>
+
+      <g><circle cx="300" cy="130" r="20" fill="#16222D" stroke="#2B3D4B" stroke-width="2"/>
+        <g class="needle" id="nd4"><line x1="282" y1="130" x2="300" y2="130" stroke="#C1503C" stroke-width="3.5"/>
+        <line x1="300" y1="130" x2="318" y2="130" stroke="#8C9AA6" stroke-width="3"/></g>
+        <circle cx="300" cy="130" r="3" fill="#E7E2D6"/>
+        <text x="300" y="166" class="lbl" text-anchor="middle">라 · 100 cm</text></g>
+    </svg>
+    <p class="note">기록장: “전선에 전류를 흘리자 나침반 바늘이 북쪽에서 벗어나 돌아갔다.”</p>
+    <p>스위치를 올리면 <b>어느 나침반의 바늘이 가장 크게 돌아갈까?</b> 먼저 예상해서 고르면 실제로 흘려 볼 수 있다.</p>
+    <div class="choices two" id="p4opts">
+      <button class="opt" data-k="a"><span class="tag">7</span>가 · 전선에서 10 cm</button>
+      <button class="opt" data-k="b"><span class="tag">4</span>나 · 전선에서 30 cm</button>
+      <button class="opt" data-k="c"><span class="tag">9</span>다 · 전선에서 60 cm</button>
+      <button class="opt" data-k="d"><span class="tag">1</span>라 · 전선에서 100 cm</button>
+    </div>
+    <p class="note">맞힌 칸에 적힌 숫자가 세 번째 숫자다.</p>
+    <div class="fb" id="p4fb"></div>
+  </div>
+
+  <div class="hintbox" data-p="4">
+    <button class="hintbtn">힌트 보기</button>
+    <div class="hints"></div>
+  </div>
+</section>
+
+<!-- ══ 퍼즐 5 ══ -->
+<section id="s5">
+  <div class="eyebrow">다섯 번째 · 철문</div>
+  <h2>빗장을 끌어당겨라</h2>
+  <p class="story">상자를 열자 <em>전자석 네 개</em>가 들어 있다. 이걸로 빗장을 끌어당겨 빼내는 수밖에 없다. 약한 걸 골랐다가는 시간만 버린다.</p>
+
+  <div class="card">
+    <svg viewBox="0 0 300 130" aria-label="철 빗장과 전자석">
+      <rect x="70" y="16" width="160" height="20" fill="#243441" stroke="#2B3D4B" stroke-width="2"/>
+      <text x="252" y="31" class="lbl">철 빗장</text>
+      <path d="M150 48 L150 64 M144 58 L150 66 L156 58" stroke="#7FD4E8" stroke-width="2" fill="none"/>
+      <text x="150" y="84" class="lbl" text-anchor="middle" fill="#7FD4E8">끌어당길 만큼 세야 한다</text>
+      <rect x="128" y="94" width="44" height="30" fill="#16222D" stroke="#2B3D4B" stroke-width="2"/>
+      <text x="150" y="114" class="lbl" text-anchor="middle">전자석</text>
+    </svg>
+    <p>부품 상자에 전자석 네 개가 들어 있다. <b>가장 센 것</b>은 어느 것인가?</p>
+    <div class="choices two" id="p5opts">
+      <button class="opt" data-k="a"><span class="tag">5</span>전지 1개 · 코일 100번 감음 · 철심 <b>있음</b></button>
+      <button class="opt" data-k="b"><span class="tag">2</span>전지 2개 · 코일 200번 감음 · 철심 <b>있음</b></button>
+      <button class="opt" data-k="c"><span class="tag">8</span>전지 2개 · 코일 200번 감음 · 철심 <b>없음</b></button>
+      <button class="opt" data-k="d"><span class="tag">1</span>전지 1개 · 코일 50번 감음 · 철심 <b>없음</b></button>
+    </div>
+    <p class="note">맞힌 칸에 적힌 숫자가 마지막 숫자다.</p>
+    <div class="fb" id="p5fb"></div>
+  </div>
+
+  <div class="hintbox" data-p="5">
+    <button class="hintbtn">힌트 보기</button>
+    <div class="hints"></div>
+  </div>
+</section>
+
+<!-- ══ 자물쇠 ══ -->
+<section id="s6">
+  <div class="eyebrow">잠금 장치</div>
+  <h2>네 자리를 입력하라</h2>
+  <p class="story">문에 달린 잠금 장치가 붉게 깜빡인다. 지금까지 모은 숫자를 순서대로.</p>
+  <div class="lockrow">
+    <input type="text" inputmode="numeric" maxlength="1" aria-label="첫째 자리">
+    <input type="text" inputmode="numeric" maxlength="1" aria-label="둘째 자리">
+    <input type="text" inputmode="numeric" maxlength="1" aria-label="셋째 자리">
+    <input type="text" inputmode="numeric" maxlength="1" aria-label="넷째 자리">
+  </div>
+  <div class="fb" id="p6fb" style="text-align:center"></div>
+  <div style="text-align:center"><button class="go" id="lockBtn">문을 연다</button></div>
+</section>
+
+<!-- ══ 완료 ══ -->
+<section id="s7">
+  <div class="eyebrow">1막 통과</div>
+  <h2>문이 열렸다</h2>
+  <p class="story">복도의 불이 하나씩 들어온다. 그런데 이상하다. 아무도 없어야 할 <em>과학실 쪽에만</em> 불이 켜져 있다. 문도 열려 있다.</p>
+  <div class="card">
+    <div class="hud-label" style="text-align:center">1막 완료 코드</div>
+    <div class="code" id="finalCode">4372</div>
+    <div class="stats">
+      <span>걸린 시간 <b id="stTime" style="color:var(--paper)">—</b></span>
+      <span>쓴 힌트 <b id="stHint" style="color:var(--paper)">—</b></span>
+      <span>남은 배터리 <b id="stBatt" style="color:var(--paper)">—</b></span>
+    </div>
+  </div>
+  <p class="note">학습지 맨 아래 칸에 위 세 가지를 적어 제출할 것. 2막 입장 코드는 선생님이 알려 준다.</p>
+  <button class="go ghost" onclick="location.reload()">처음부터 다시</button>
+</section>
+
+</main>
+
+<script>
+/* ───────── 상태 ───────── */
+const S = {batt:100, hints:0, start:Date.now(), digits:[null,null,null,null]};
+const HINTS = {
+  1:["전류는 전지의 한쪽 극에서 나와, 반드시 다른 쪽 극으로 돌아와야 한다.",
+     "전구에는 전기가 닿는 곳이 두 군데 있다. 아래 꼭지, 그리고 옆 나사 부분.",
+     "(+)극에서 나와 → 꼭지 → 나사 부분 → (−)극으로 돌아온다."],
+  2:["한 줄로 이으면 전구 하나가 나가는 순간 나머지도 전부 꺼진다. 복도 등으로 쓸 수 있을까?",
+     "한 줄 연결(직렬)은 전구가 늘어날수록 전체 저항이 커져서 전류가 줄고, 그만큼 어두워진다.",
+     "각각 따로 갈라 붙이면(병렬) 전구마다 같은 전압이 걸려 모두 밝게 켜진다. B."],
+  3:["전압, 저항, 전류 사이의 관계식을 떠올려라.",
+     "전류 = 전압 ÷ 저항. 세 회로를 각각 계산해서 비교하면 된다.",
+     "A는 12÷6=2 A, B는 9÷3=3 A, C는 6÷6=1 A."],
+  4:["전선에 전류가 흐르면 그 둘레에 자기장이 생긴다. 나침반 바늘은 그 자기장 때문에 움직인다.",
+     "자석도 가까이 대면 세게 끌리고 멀리 두면 거의 안 끌린다. 전류가 만드는 자기장도 마찬가지다.",
+     "전선에서 가까울수록 자기장이 세다. 네 개 중 전선에 가장 가까운 것을 고르면 된다."],
+  5:["전자석의 세기를 정하는 것은 세 가지다. 전류의 세기, 코일을 감은 횟수, 그리고 철심.",
+     "전지를 더 많이 이으면 전류가 세지고, 코일을 더 많이 감을수록 자기장이 세진다.",
+     "코일 속에 철심(쇠막대)을 넣으면 자기장이 훨씬 세진다. 세 가지 조건이 모두 좋은 것이 하나 있다."]
+};
+
+/* ───────── 손전등 ───────── */
+const beam = document.getElementById('beam');
+const coarse = matchMedia('(pointer:coarse)').matches;
+function moveBeam(x,y){
+  beam.style.setProperty('--mx', x+'px');
+  beam.style.setProperty('--my', y+'px');
+}
+addEventListener('pointermove', e=>moveBeam(e.clientX,e.clientY));
+addEventListener('pointerdown', e=>moveBeam(e.clientX,e.clientY));
+addEventListener('scroll', ()=>{ if(coarse) moveBeam(innerWidth/2, innerHeight*0.42); });
+moveBeam(innerWidth/2, innerHeight*0.4);
+if(coarse) document.documentElement.style.setProperty('--beam','360px');
+
+document.getElementById('lightBtn').onclick = e=>{
+  document.body.classList.toggle('lights-on');
+  e.target.textContent = document.body.classList.contains('lights-on') ? '조명 끄기' : '조명 켜기';
+};
+
+/* ───────── 배터리 ───────── */
+const battFill=document.getElementById('battFill'), battPct=document.getElementById('battPct');
+function drawBatt(){
+  S.batt = Math.max(15, S.batt);
+  battFill.style.width = S.batt+'%';
+  battPct.textContent = Math.round(S.batt)+'%';
+  document.getElementById('batt').classList.toggle('low', S.batt<=35);
+  const r = coarse ? (250 + S.batt*1.1) : (170 + S.batt*1.3);
+  document.documentElement.style.setProperty('--beam', r+'px');
+}
+setInterval(()=>{ S.batt -= 0.05; drawBatt(); }, 1000);
+drawBatt();
+
+/* ───────── 화면 전환 ───────── */
+function show(id){
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  scrollTo({top:0,behavior:'smooth'});
+}
+/* ───────── 이동 ───────── */
+const MOVES={
+  s2:{place:'1층 복도 · 배전반 앞', time:'20:46',
+      line:'교실 뒷문을 밀고 복도로 나온다. 내 발소리가 복도 끝까지 울린다. 벽을 더듬어 가다 보니 배전반 뚜껑이 열린 채 덜렁거리고 있다.'},
+  s3:{place:'1층 복도 · 배전반 계기판', time:'20:49',
+      line:'복도 등이 하나씩 들어온다. 배전반 안쪽 계기판 유리에 손전등을 가까이 댄다. 바늘은 멈춰 있고 숫자만 남아 있다.'},
+  s4:{place:'과학실 앞 복도', time:'20:54',
+      line:'복도를 따라 안쪽으로 걷는다. 과학실 앞에 이르자 바닥에 나침반 네 개가 줄지어 놓여 있다. 누군가 실험을 하다 그대로 두고 간 것 같다.'},
+  s5:{place:'복도 끝 · 철문', time:'20:59',
+      line:'복도 끝에 다다랐다. 철문은 안쪽에서 굵은 빗장이 걸려 있다. 손은 닿지 않는다. 부품 상자를 바닥에 내려놓는다.'},
+  s6:{place:'철문 · 잠금 장치', time:'21:02',
+      line:'빗장이 빠졌다. 이제 문 옆의 잠금 장치만 남았다. 붉은 불빛이 규칙적으로 깜빡인다.'}
+};
+function setPlace(place,time){
+  document.getElementById('placeName').textContent=place;
+  document.getElementById('clock').textContent=time;
+}
+const slowMotion=matchMedia('(prefers-reduced-motion:reduce)').matches;
+function travel(target){
+  const m=MOVES[target];
+  if(!m){ show(target); return; }
+  document.getElementById('moveTo').textContent='→ '+m.place;
+  document.getElementById('moveLine').textContent=m.line;
+  const bar=document.getElementById('walkBar');
+  bar.style.animation='none'; void bar.offsetWidth; bar.style.animation='';
+  show('move');
+  setTimeout(()=>{ setPlace(m.place,m.time); show(target); }, slowMotion?900:2400);
+}
+function nextBtn(sec, target, label){
+  const b=document.createElement('button');
+  b.className='go'; b.textContent=label;
+  b.onclick=()=>travel(target);
+  document.getElementById(sec).appendChild(b);
+  b.focus({preventScroll:true});
+}
+
+/* 튜토리얼 · 비추면 드러나는 글씨 */
+(function(){
+  const spot=document.getElementById('spot');
+  function check(x,y){
+    const r=spot.getBoundingClientRect();
+    const dx=x-(r.left+r.width/2), dy=y-(r.top+r.height/2);
+    if(Math.hypot(dx,dy) < Math.max(150, r.width/2)) spot.classList.add('lit');
+  }
+  addEventListener('pointermove', e=>check(e.clientX,e.clientY));
+  addEventListener('pointerdown', e=>check(e.clientX,e.clientY));
+  document.getElementById('lightBtn').addEventListener('click',()=>spot.classList.add('lit'));
+  setTimeout(()=>spot.classList.add('lit'), 30000);
+})();
+function setDigit(i,v){
+  S.digits[i]=v;
+  const el=document.querySelector('.slot[data-i="'+i+'"]');
+  el.textContent=v; el.classList.add('filled');
+}
+function fb(id,msg,ok){
+  const el=document.getElementById(id);
+  el.textContent=msg; el.className='fb '+(ok?'ok':'no');
+}
+
+/* ───────── 힌트 ───────── */
+document.querySelectorAll('.hintbox').forEach(box=>{
+  const p=box.dataset.p, btn=box.querySelector('.hintbtn'), wrap=box.querySelector('.hints');
+  let n=0;
+  btn.onclick=()=>{
+    if(n>=HINTS[p].length) return;
+    const d=document.createElement('div');
+    d.className='hint';
+    d.innerHTML='<b>힌트 '+(n+1)+'</b>'+HINTS[p][n];
+    wrap.appendChild(d);
+    n++; S.hints++; S.batt-=4; drawBatt();
+    btn.textContent = n>=HINTS[p].length ? '힌트를 다 봤다' : '힌트 하나 더';
+    if(n>=HINTS[p].length) btn.disabled=true;
+  };
+});
+
+/* ───────── 1. 손전등 조립 ───────── */
+(function(){
+  const want=['a','b','c','d'], names={a:'전지(+)',b:'꼭지',c:'나사',d:'전지(−)'};
+  let got=[];
+  document.querySelectorAll('#p1parts .part').forEach(btn=>{
+    btn.onclick=()=>{
+      const k=btn.dataset.k;
+      if(k===want[got.length]){
+        got.push(k); btn.classList.add('on'); btn.disabled=true;
+        document.getElementById('p1seq').textContent='순서: '+got.map(x=>names[x]).join(' → ');
+        if(got.length===4){
+          document.getElementById('p1bulb').setAttribute('class','bulb-on');
+          fb('p1fb','손전등에 불이 들어왔다. 시야가 넓어진다.',true);
+          S.batt=Math.min(100,S.batt+6); drawBatt();
+          nextBtn('s1','s2','복도로 나간다');
+        }
+      }else{
+        btn.classList.add('wrong'); setTimeout(()=>btn.classList.remove('wrong'),400);
+        fb('p1fb','여기서 전류가 끊긴다. 처음부터 다시.',false);
+        got=[];
+        document.querySelectorAll('#p1parts .part').forEach(b=>{b.classList.remove('on');b.disabled=false});
+        document.getElementById('p1seq').textContent='순서: —';
+      }
+    };
+  });
+})();
+
+/* ───────── 선택형 문제 공통 ───────── */
+function choice(optsId, right, fbId, onOk, wrongMsg){
+  document.querySelectorAll('#'+optsId+' .opt').forEach(btn=>{
+    btn.onclick=()=>{
+      if(btn.dataset.k===right){
+        btn.classList.add('picked');
+        document.querySelectorAll('#'+optsId+' .opt').forEach(b=>b.disabled=true);
+        onOk();
+      }else{
+        btn.classList.add('wrong'); setTimeout(()=>btn.classList.remove('wrong'),400);
+        fb(fbId, wrongMsg, false);
+      }
+    };
+  });
+}
+
+/* 2. 배전반 */
+choice('p2opts','par','p2fb',()=>{
+  document.querySelectorAll('#p2opts .opt[data-k="par"] .bulb-off').forEach(c=>c.setAttribute('class','bulb-on'));
+  fb('p2fb','복도 등 네 개가 모두 켜졌다. 켜진 전구의 개수가 첫 번째 숫자다.',true);
+  setDigit(0,4);
+  nextBtn('s2','s3','계기판을 본다');
+}, '연결은 됐지만 원하는 대로 켜지지 않는다.');
+
+/* 3. 옴의 법칙 */
+choice('p3opts','B','p3fb',()=>{
+  fb('p3fb','B가 3 A로 가장 세다. 두 번째 숫자는 3.',true);
+  setDigit(1,3);
+  nextBtn('s3','s4','더 안쪽으로');
+}, '계산해 보면 그 회로가 가장 세지는 않다.');
+
+/* 4. 나침반 */
+choice('p4opts','a','p4fb',()=>{
+  [['nd1',62],['nd2',26],['nd3',11],['nd4',4]].forEach(([id,deg])=>{
+    const g=document.getElementById(id);
+    g.style.transformBox='fill-box';
+    g.style.transformOrigin='center';
+    g.style.transition='transform 1.4s cubic-bezier(.2,.8,.3,1)';
+    setTimeout(()=>{ g.style.transform='rotate(-'+deg+'deg)'; },120);
+  });
+  fb('p4fb','스위치를 올리자 가장 가까운 「가」의 바늘이 크게 돌아갔다. 멀수록 거의 움직이지 않는다. 세 번째 숫자는 7.',true);
+  setDigit(2,7);
+  nextBtn('s4','s5','철문 앞에 선다');
+}, '그 나침반의 바늘은 거의 꿈쩍하지 않았다.');
+
+/* 5. 전자석 */
+choice('p5opts','b','p5fb',()=>{
+  fb('p5fb','빗장이 스르륵 딸려 나온다. 마지막 숫자는 2.',true);
+  setDigit(3,2);
+  nextBtn('s5','s6','잠금 장치를 마주한다');
+}, '빗장이 꿈쩍도 하지 않는다. 힘이 모자란다.');
+
+/* ───────── 자물쇠 ───────── */
+const inputs=[...document.querySelectorAll('.lockrow input')];
+inputs.forEach((inp,i)=>{
+  inp.oninput=()=>{
+    inp.value=inp.value.replace(/\D/g,'');
+    if(inp.value && i<3) inputs[i+1].focus();
+  };
+  inp.onkeydown=e=>{ if(e.key==='Backspace' && !inp.value && i>0) inputs[i-1].focus(); };
+});
+document.getElementById('lockBtn').onclick=()=>{
+  const v=inputs.map(i=>i.value).join('');
+  if(v==='4372'){
+    const sec=Math.round((Date.now()-S.start)/1000);
+    document.getElementById('stTime').textContent=Math.floor(sec/60)+'분 '+(sec%60)+'초';
+    document.getElementById('stHint').textContent=S.hints+'개';
+    document.getElementById('stBatt').textContent=Math.round(S.batt)+'%';
+    document.body.classList.add('lights-on');
+    document.getElementById('lightBtn').textContent='조명 끄기';
+    setPlace('복도 · 과학실 앞','21:04');
+    show('s7');
+  }else{
+    fb('p6fb','잠금 장치가 붉게 깜빡인다. 모은 숫자를 순서대로 다시 확인해라.',false);
+    inputs.forEach(i=>{i.value='';});
+    inputs[0].focus();
+  }
+};
+</script>
+</body>
+</html>
